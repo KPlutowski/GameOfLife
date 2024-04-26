@@ -1,5 +1,9 @@
+import cProfile
+import pstats
+
 import numpy as np
 import pygame
+from scipy.signal import convolve2d
 
 
 class Game:
@@ -8,15 +12,20 @@ class Game:
         self.screen = _screen
         self.generation_count = 0
 
-        self.size_of_pixel = 5
-        self.width = self.screen.get_size()[0] // self.size_of_pixel
-        self.height = self.screen.get_size()[1] // self.size_of_pixel
+        self.cell_size = 2
+        self.width = self.screen.get_size()[0] // self.cell_size
+        self.height = self.screen.get_size()[1] // self.cell_size
+        self.alive_surface = pygame.Surface((self.width * self.cell_size, self.height * self.cell_size))
 
         self.running = True
         self.background_color = (0, 0, 0)
         self.cell_color = (255, 255, 255)
 
         self.setup_start_array()
+
+        self.max_fps = 30
+        self.clock = pygame.time.Clock()
+        self.start_timer = pygame.time.get_ticks()
 
     def run(self):
         # main loop
@@ -27,13 +36,16 @@ class Game:
                 if event.type == pygame.QUIT:
                     self.running = False
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RIGHT:
-                    self.calculate_new_generation()
-                    print(f"generation number: {self.generation_count}")
+            # if event.type == pygame.KEYDOWN:
+            #     if event.key == pygame.K_RIGHT:
+            # print(self.start_timer)
+            # print(f"generation number: {self.generation_count}")
 
-            self.print_game_array()
+            self.calculate_new_generation()
+            self.print_game_array(self.screen)
             pygame.display.update()
+
+            self.clock.tick(self.max_fps)
 
     def setup_start_array(self):
         self.game_array = (np.random.default_rng().random((self.height, self.width)) + 0.4).astype(np.byte)
@@ -44,90 +56,52 @@ class Game:
         # self.game_array[1][0] = 1
         # self.game_array[2][1] = 1
 
-    def print_game_array(self):
-        for i, row in enumerate(self.game_array):
-            for j, cell in enumerate(row):
-                if cell:
-                    pygame.draw.rect(self.screen, self.cell_color,
-                                     pygame.Rect(j * self.size_of_pixel, i * self.size_of_pixel, self.size_of_pixel,
-                                                 self.size_of_pixel))
+    def print_game_array(self, _screen):
+        alive_cells = np.argwhere(self.game_array == 1)
+        cell_size = self.cell_size
 
-    def calculate_neighbors(self):
-        (w, h) = (self.width, self.height)
-        neighbors = np.zeros((h, w), np.uint8)
+        self.alive_surface.fill(self.background_color)
 
-        for i in range(1, h - 1):
-            for j in range(1, w - 1):
-                neighbors[i][j] = self.game_array[i + 1][j - 1] + self.game_array[i + 1][j] + self.game_array[i + 1][
-                    j + 1] + self.game_array[i][j - 1] + self.game_array[i][j + 1] + self.game_array[i - 1][j - 1] + \
-                                  self.game_array[i - 1][j] + self.game_array[i - 1][j + 1]
+        # Draw all alive cells onto the alive surface
+        for y, x in alive_cells:
+            pygame.draw.rect(self.alive_surface, self.cell_color, (x * cell_size, y * cell_size, cell_size, cell_size))
 
-            # left
-            neighbors[i][0] = (
-                    self.game_array[i - 1][w - 1] + self.game_array[i - 1][0] + self.game_array[i - 1][1]
-                    + self.game_array[i][w - 1] + self.game_array[i][1] +
-                    self.game_array[i + 1][w - 1] + self.game_array[i + 1][0] + self.game_array[i + 1][1])
-            # right
-            neighbors[i][w - 1] = (
-                    self.game_array[i - 1][w - 2] + self.game_array[i - 1][w - 1] +
-                    self.game_array[i - 1][0]
-                    + self.game_array[i][w - 2] + self.game_array[i][0] +
-                    self.game_array[i + 1][w - 2] + self.game_array[i + 1][w - 1] +
-                    self.game_array[i + 1][0])
-
-        for i in range(1, w - 1):
-            # up
-            neighbors[0][i] = (
-                    self.game_array[h - 1][i - 1] + self.game_array[h - 1][i] + self.game_array[h - 1][i + 1] +
-                    self.game_array[0][i - 1] + self.game_array[0][i + 1] + self.game_array[1][i - 1] +
-                    self.game_array[1][i] + self.game_array[1][i + 1])
-            # down
-            neighbors[h - 1][i] = (
-                    self.game_array[h - 2][i - 1] + self.game_array[h - 2][i] + self.game_array[h - 2][i + 1] +
-                    self.game_array[h - 1][i - 1] + self.game_array[h - 1][i + 1] + self.game_array[0][i - 1] +
-                    self.game_array[0][i] + self.game_array[0][i + 1])
-
-        neighbors[0][0] = (self.game_array[h - 1][w - 1] + self.game_array[h - 1][0] +
-                           self.game_array[h - 1][1] + self.game_array[0][w - 1] +
-                           self.game_array[0][1] +
-                           self.game_array[1][w - 1] + self.game_array[1][0] + self.game_array[1][1])
-        neighbors[h - 1][0] = \
-            (self.game_array[h - 2][w - 1] + self.game_array[h - 2][0] +
-             self.game_array[h - 2][1]
-             + self.game_array[h - 1][w - 1] + self.game_array[h - 1][1] +
-             self.game_array[0][w - 1] + self.game_array[0][0] + self.game_array[0][1])
-        neighbors[0][w - 1] = \
-            (self.game_array[h - 1][w - 2] + self.game_array[h - 1][w - 1] +
-             self.game_array[h - 1][0]
-             + self.game_array[0][w - 2] + self.game_array[0][0] +
-             self.game_array[1][w - 2] + self.game_array[1][w - 1] + self.game_array[1][0])
-        neighbors[h - 1][w - 1] = \
-            (self.game_array[h - 2][w - 2] + self.game_array[h - 2][w - 1] +
-             self.game_array[h - 2][0]
-             + self.game_array[h - 1][w - 2] + self.game_array[h - 1][0] +
-             self.game_array[0][w - 2] + self.game_array[0][w - 1] + self.game_array[0][0])
-        return neighbors
+        # Blit the alive surface onto the screen
+        _screen.blit(self.alive_surface, (0, 0))
 
     def calculate_new_generation(self):
         self.generation_count += 1
-        (w, h) = (self.width, self.height)
-        neighbors = self.calculate_neighbors()
 
-        for i in range(h):
-            for j in range(w):
-                if self.game_array[i][j] == 1 and (neighbors[i][j] == 3 or neighbors[i][j] == 2):  # before /
-                    self.game_array[i][j] = 1
-                elif self.game_array[i][j] == 0 and neighbors[i][j] == 3:  # after /
-                    self.game_array[i][j] = 1
-                else:
-                    self.game_array[i][j] = 0
+        # Define the kernel for convolution
+        kernel = np.array([[1, 1, 1],
+                           [1, 0, 1],
+                           [1, 1, 1]], dtype=np.uint8)
+
+        # Compute the convolution
+        neighbors = convolve2d(self.game_array, kernel, mode='same', boundary='wrap')
+
+        # Apply game rules
+        alive_mask = (self.game_array == 1)
+        neighbors_2_or_3 = (neighbors == 2) | (neighbors == 3)
+        neighbors_3 = (neighbors == 3)
+
+        self.game_array[alive_mask & neighbors_2_or_3] = 1
+        self.game_array[~alive_mask & neighbors_3] = 1
+        self.game_array[~(alive_mask & neighbors_2_or_3) & ~(~alive_mask & neighbors_3)] = 0
 
 
 if __name__ == '__main__':
+    profiler = cProfile.Profile()
+    profiler.enable()
+
     pygame.init()
     disp_size = (800, 600)
     screen = pygame.display.set_mode(disp_size)
-
     Game(screen).run()
     pygame.quit()
+
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('tottime')
+    stats.print_stats()
+    stats.dump_stats('profile_results.prof')
     exit()
