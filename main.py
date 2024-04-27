@@ -3,53 +3,91 @@ import pstats
 
 import numpy as np
 import pygame
-from scipy.signal import convolve2d
 
 
 class Game:
-    def __init__(self, _screen):
+    def __init__(self, ):
+        pygame.display.set_caption('Game Of Life')
+        icon = pygame.image.load('icon.png')
+        pygame.display.set_icon(icon)
+
+        # self.display_size = (1920, 1080)
+        self.display_size = (800, 600)
+
+        self.screen = pygame.display.set_mode(self.display_size, pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE)
+
+        self.cell_size = 1
+        self.width = self.display_size[0] // self.cell_size
+        self.height = self.display_size[1] // self.cell_size
+        self.surface_to_draw = pygame.Surface((self.width, self.height))  # const size like self.game_array
+
         self.game_array = None
-        self.screen = _screen
         self.generation_count = 0
 
-        self.cell_size = 2
-        self.width = self.screen.get_size()[0] // self.cell_size
-        self.height = self.screen.get_size()[1] // self.cell_size
-        self.alive_surface = pygame.Surface((self.width * self.cell_size, self.height * self.cell_size))
-
         self.running = True
+        self.pause = False
         self.background_color = (0, 0, 0)
         self.cell_color = (255, 255, 255)
+        self.color_value = self.cell_color[0] * 256 ** 2 + self.cell_color[1] * 256 + self.cell_color[2]
 
+        self.random_seed = np.random.default_rng(2137)
+        self.probability_of_white = 0.3
         self.setup_start_array()
 
         self.max_fps = 30
         self.clock = pygame.time.Clock()
-        self.start_timer = pygame.time.get_ticks()
 
     def run(self):
         # main loop
         while self.running:
-            screen.fill(self.background_color)
-
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
 
-            # if event.type == pygame.KEYDOWN:
-            #     if event.key == pygame.K_RIGHT:
-            # print(self.start_timer)
-            # print(f"generation number: {self.generation_count}")
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_n:
+                        self.setup_start_array()
+                    elif event.key == pygame.K_SPACE:
+                        self.pause = not self.pause
+                    elif event.key == pygame.K_RIGHT:
+                        if self.pause:
+                            # self.calculate_new_generation()
+                            # self.print_game_array(self.screen)
+                            self.next_frame()
+                    elif event.key == pygame.K_f:
+                        pygame.display.toggle_fullscreen()
+                    elif event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                        self.running = False
+                elif event.type == pygame.VIDEORESIZE:
+                    self.screen = pygame.display.set_mode(event.size,
+                                                          pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE)
+                    # self.width = self.screen.get_size()[1] // self.cell_size
+                    # self.height = self.screen.get_size()[0] // self.cell_size
+                    # self.setup_start_array()
 
-            self.calculate_new_generation()
-            self.print_game_array(self.screen)
-            pygame.display.update()
+            if self.pause:
+                pygame.time.wait(1)
+            else:
+                self.next_frame()
 
-            self.clock.tick(self.max_fps)
+
+
+    def next_frame(self):
+        self.calculate_new_generation()
+        self.print_game_array(self.screen)
+
+
+
+        self.screen.blit(pygame.transform.scale(self.surface_to_draw, self.screen.get_rect().size), (0, 0))
+        pygame.display.flip()
+
+        self.clock.tick(self.max_fps)
+        print(self.clock.get_fps())
 
     def setup_start_array(self):
-        self.game_array = (np.random.default_rng().random((self.height, self.width)) + 0.4).astype(np.byte)
-        # self.game_array = np.zeros((self.height, self.width), np.uint8)
+        self.game_array = (self.random_seed.random((self.width, self.height)) + self.probability_of_white).astype(
+            np.byte)
+        # self.game_array = np.zeros(( self.width,self.height), np.uint8)
         # self.game_array[0][0] = 1
         # self.game_array[0][1] = 1
         # self.game_array[0][2] = 1
@@ -57,48 +95,47 @@ class Game:
         # self.game_array[2][1] = 1
 
     def print_game_array(self, _screen):
-        alive_cells = np.argwhere(self.game_array == 1)
-        cell_size = self.cell_size
+        # start_timer = pygame.time.get_ticks()
 
-        self.alive_surface.fill(self.background_color)
+        while self.screen.get_locked():
+            self.screen.unlock()
 
-        # Draw all alive cells onto the alive surface
-        for y, x in alive_cells:
-            pygame.draw.rect(self.alive_surface, self.cell_color, (x * cell_size, y * cell_size, cell_size, cell_size))
+        surface_array = pygame.surfarray.pixels2d(self.surface_to_draw)
+        surface_array[:] = np.multiply.outer(self.game_array, self.color_value)
 
-        # Blit the alive surface onto the screen
-        _screen.blit(self.alive_surface, (0, 0))
+        # end_timer = pygame.time.get_ticks()
+        # print(end_timer-start_timer)
 
     def calculate_new_generation(self):
-        self.generation_count += 1
+        # start_timer = pygame.time.get_ticks()
 
-        # Define the kernel for convolution
-        kernel = np.array([[1, 1, 1],
-                           [1, 0, 1],
-                           [1, 1, 1]], dtype=np.uint8)
-
-        # Compute the convolution
-        neighbors = convolve2d(self.game_array, kernel, mode='same', boundary='wrap')
-
+        # Pad the game array to handle boundary conditions
+        padded_game_array = np.pad(self.game_array, 1, mode='wrap')
+        neighbor_count = (
+                padded_game_array[:-2, :-2] + padded_game_array[:-2, 1:-1] + padded_game_array[:-2, 2:] +
+                padded_game_array[1:-1, :-2] + padded_game_array[1:-1, 2:] +
+                padded_game_array[2:, :-2] + padded_game_array[2:, 1:-1] + padded_game_array[2:, 2:]
+        )
         # Apply game rules
-        alive_mask = (self.game_array == 1)
-        neighbors_2_or_3 = (neighbors == 2) | (neighbors == 3)
-        neighbors_3 = (neighbors == 3)
+        born_cells = (neighbor_count == 3)
+        survive_cells = np.logical_and(self.game_array, np.isin(neighbor_count, [2, 3]))
+        self.game_array = np.array(born_cells | survive_cells, dtype=np.uint8)
 
-        self.game_array[alive_mask & neighbors_2_or_3] = 1
-        self.game_array[~alive_mask & neighbors_3] = 1
-        self.game_array[~(alive_mask & neighbors_2_or_3) & ~(~alive_mask & neighbors_3)] = 0
+        # end_timer = pygame.time.get_ticks()
+        # print(end_timer-start_timer)
+
+
+def main():
+    pygame.init()
+    Game().run()
+    pygame.quit()
 
 
 if __name__ == '__main__':
     profiler = cProfile.Profile()
     profiler.enable()
 
-    pygame.init()
-    disp_size = (800, 600)
-    screen = pygame.display.set_mode(disp_size)
-    Game(screen).run()
-    pygame.quit()
+    main()
 
     profiler.disable()
     stats = pstats.Stats(profiler).sort_stats('tottime')
