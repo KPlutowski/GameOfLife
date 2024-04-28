@@ -1,6 +1,3 @@
-import cProfile
-import pstats
-
 import numpy as np
 import pygame
 
@@ -73,18 +70,18 @@ class Game:
     def print_info(self):
         while self.screen.get_locked():
             self.screen.unlock()
-        offset=10
+        offset = 10
         height = self.font.get_height()
-        self.print_text(offset, offset+height*0, 'frames per sec:  ' + str(int(self.clock.get_fps())))
-        self.print_text(offset, offset+height*1, 'life amount:     ' + str(int(self.life_amount)))
-        self.print_text(offset, offset+height*2, 'generation nr:   ' + str(int(self.generation_count)))
+        self.print_text(offset, offset + height * 0, 'frames per sec:  ' + str(int(self.clock.get_fps())))
+        self.print_text(offset, offset + height * 1, 'life amount:     ' + str(int(self.life_amount)))
+        self.print_text(offset, offset + height * 2, 'generation nr:   ' + str(int(self.generation_count)))
 
-        self.print_text(offset, offset+height*3, 'info on/off:  i')
-        self.print_text(offset, offset+height*4, 'full screen:  f')
-        self.print_text(offset, offset+height*5, 'new breed:  n')
-        self.print_text(offset, offset+height*6, 'pause:  SPACE')
-        self.print_text(offset, offset+height*7, 'next generation:  right arrow')
-        self.print_text(offset, offset+height*8, 'exit:  ESC')
+        self.print_text(offset, offset + height * 3, 'info on/off:  i')
+        self.print_text(offset, offset + height * 4, 'full screen:  f')
+        self.print_text(offset, offset + height * 5, 'new breed:  n')
+        self.print_text(offset, offset + height * 6, 'pause:  SPACE')
+        self.print_text(offset, offset + height * 7, 'next generation:  right arrow')
+        self.print_text(offset, offset + height * 8, 'exit:  ESC')
 
     def print_text(self, x, y, text_to_render):
         outline_render = self.font.render(text_to_render, True, self.outline_color)
@@ -183,13 +180,5 @@ def main():
 
 
 if __name__ == '__main__':
-    profiler = cProfile.Profile()
-    profiler.enable()
-
     main()
-
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats('tottime')
-    stats.print_stats()
-    stats.dump_stats('profile_results.prof')
     exit()
